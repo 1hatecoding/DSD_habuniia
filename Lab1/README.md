@@ -93,14 +93,3 @@ python load-test/benchmark.py
 2. Сценарій 1: 10 одночасних клієнтів × 10 000 транзакцій `+1` на 10 окремих рахунках (по `10 000` на кожному).
 3. Сценарій 2: 10 одночасних клієнтів × 10 000 транзакцій `+1` на 1 спільному рахунку (`100 000` разом).
 4. Виводить пропускну здатність (запитів/с), внесок за часом `logging-service` та `counter-service`, а також підсумкову Markdown-таблицю.
-
-## Вимога щодо гілки GitHub
-
-Перед відправкою на GitHub закомітьте весь код у гілку `micro_basics`:
-
-```bash
-git init
-git checkout -b micro_basics
-git add .
-git commit -m "Implement Task 1 microservices architecture with FastAPI"
-```
