@@ -1,0 +1,32 @@
+services:
+  logging-service:
+    build:
+      context: ./logging-service
+    environment:
+      - PORT=8001
+      - LOG_TRANSACTIONS=${LOG_TRANSACTIONS:-0}
+    ports:
+      - "8001:8001"
+
+  counter-service:
+    build:
+      context: ./counter-service
+    environment:
+      - PORT=8002
+      - LOG_TRANSACTIONS=${LOG_TRANSACTIONS:-0}
+    ports:
+      - "8002:8002"
+
+  facade-service:
+    build:
+      context: ./facade-service
+    environment:
+      - PORT=8000
+      - LOGGING_SERVICE_URL=http://logging-service:8001
+      - COUNTER_SERVICE_URL=http://counter-service:8002
+    ports:
+      - "8000:8000"
+    depends_on:
+      - logging-service
+      - counter-service
+
