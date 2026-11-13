@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: bank-system
+data:
+  # General K8s Discovery
+  K8S_NAMESPACE: "bank-system"
+  K8S_LOGGING_SERVICE_NAME: "logging-service"
+  K8S_COUNTER_SERVICE_NAME: "counter-service"
+
+  # Hazelcast Client Config (Req. 3)
+  HAZELCAST_CLUSTER_NAME: "dev"
+  HAZELCAST_CLUSTER_MEMBERS: "hazelcast-service:5701"
+
+  # Message Queue Config (Req. 4)
+  HAZELCAST_QUEUE_NAME: "counter_queue"
+
+  # PostgreSQL DB Config
+  DATABASE_URL: "postgresql://postgres:postgrespassword@postgres-service:5432/bank"
+
+  # Application Flags
+  LOG_TRANSACTIONS: "true"

@@ -1,0 +1,89 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hazelcast-config
+  namespace: bank-system
+data:
+  hazelcast.yaml: |
+    hazelcast:
+      cluster-name: dev
+      network:
+        port:
+          port: 5701
+          auto-increment: false
+        join:
+          multicast:
+            enabled: false
+          kubernetes:
+            enabled: true
+            service-name: hazelcast-service
+            namespace: bank-system
+      queue:
+        counter_queue:
+          max-size: 100000
+          backup-count: 1
+          async-backup-count: 1
+          empty-queue-ttl: -1
+      map:
+        transactions:
+          backup-count: 1
+          async-backup-count: 1
+          in-memory-format: OBJECT
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hazelcast-service
+  namespace: bank-system
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - port: 5701
+      targetPort: 5701
+      name: hazelcast
+  selector:
+    app: hazelcast
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: hazelcast
+  namespace: bank-system
+  labels:
+    app: hazelcast
+spec:
+  serviceName: hazelcast-service
+  replicas: 3
+  selector:
+    matchLabels:
+      app: hazelcast
+  template:
+    metadata:
+      labels:
+        app: hazelcast
+    spec:
+      serviceAccountName: microservices-sa
+      containers:
+        - name: hazelcast
+          image: hazelcast/hazelcast:5.5.0
+          ports:
+            - containerPort: 5701
+              name: hazelcast
+          env:
+            - name: HZ_CONFIG
+              value: "/opt/hazelcast/config_ext/hazelcast.yaml"
+          volumeMounts:
+            - name: config-volume
+              mountPath: /opt/hazelcast/config_ext
+          resources:
+            requests:
+              cpu: "150m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "768Mi"
+      volumes:
+        - name: config-volume
+          configMap:
+            name: hazelcast-config

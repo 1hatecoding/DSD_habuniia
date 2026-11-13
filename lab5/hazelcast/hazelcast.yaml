@@ -1,0 +1,30 @@
+hazelcast:
+  cluster-name: dev
+  network:
+    port:
+      port: 5701
+      auto-increment: true
+    join:
+      multicast:
+        enabled: false
+      tcp-ip:
+        enabled: true
+        member-list:
+          - hazelcast-service
+          - hazelcast-1
+          - hazelcast-2
+          - hazelcast-3
+          - 127.0.0.1:5701
+          - 127.0.0.1:5702
+          - 127.0.0.1:5703
+  queue:
+    counter_queue:
+      max-size: 100000
+      backup-count: 1
+      async-backup-count: 1
+      empty-queue-ttl: -1
+  map:
+    transactions:
+      backup-count: 1
+      async-backup-count: 1
+      in-memory-format: OBJECT

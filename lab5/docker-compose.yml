@@ -1,0 +1,188 @@
+version: '3.8'
+
+services:
+  # ---------------------------------------------------------
+  # PostgreSQL (Persistent Counter DB)
+  # ---------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    environment:
+      POSTGRES_DB: bank
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d bank"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    networks:
+      - bank-net
+
+  # ---------------------------------------------------------
+  # Hazelcast 3-Node Cluster (Distributed Queue & Map)
+  # ---------------------------------------------------------
+  hazelcast-1:
+    image: hazelcast/hazelcast:5.5.0
+    container_name: hazelcast-1
+    ports:
+      - "5701:5701"
+    environment:
+      - HZ_CONFIG=/opt/hazelcast/config_ext/hazelcast.yaml
+    volumes:
+      - ./hazelcast/hazelcast.yaml:/opt/hazelcast/config_ext/hazelcast.yaml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "cat /opt/hazelcast/logs/*.log 2>/dev/null | grep -q 'Members {' || exit 1"]
+      interval: 4s
+      timeout: 3s
+      retries: 15
+    networks:
+      - bank-net
+
+  hazelcast-2:
+    image: hazelcast/hazelcast:5.5.0
+    container_name: hazelcast-2
+    ports:
+      - "5702:5701"
+    environment:
+      - HZ_CONFIG=/opt/hazelcast/config_ext/hazelcast.yaml
+    volumes:
+      - ./hazelcast/hazelcast.yaml:/opt/hazelcast/config_ext/hazelcast.yaml:ro
+    depends_on:
+      hazelcast-1:
+        condition: service_healthy
+    networks:
+      - bank-net
+
+  hazelcast-3:
+    image: hazelcast/hazelcast:5.5.0
+    container_name: hazelcast-3
+    ports:
+      - "5703:5701"
+    environment:
+      - HZ_CONFIG=/opt/hazelcast/config_ext/hazelcast.yaml
+    volumes:
+      - ./hazelcast/hazelcast.yaml:/opt/hazelcast/config_ext/hazelcast.yaml:ro
+    depends_on:
+      hazelcast-1:
+        condition: service_healthy
+    networks:
+      - bank-net
+
+  # ---------------------------------------------------------
+  # Logging Services (3 Replicas)
+  # ---------------------------------------------------------
+  logging-service-1:
+    build:
+      context: ./logging-service
+      dockerfile: Dockerfile
+    container_name: logging-service-1
+    ports:
+      - "8001:8001"
+    environment:
+      - PORT=8001
+      - INSTANCE_NAME=logging-service-1
+      - HAZELCAST_CLUSTER_NAME=dev
+      - HAZELCAST_CLUSTER_MEMBERS=hazelcast-1:5701,hazelcast-2:5701,hazelcast-3:5701
+      - LOG_TRANSACTIONS=true
+    depends_on:
+      hazelcast-1:
+        condition: service_healthy
+    networks:
+      - bank-net
+
+  logging-service-2:
+    build:
+      context: ./logging-service
+      dockerfile: Dockerfile
+    container_name: logging-service-2
+    ports:
+      - "8003:8001"
+    environment:
+      - PORT=8001
+      - INSTANCE_NAME=logging-service-2
+      - HAZELCAST_CLUSTER_NAME=dev
+      - HAZELCAST_CLUSTER_MEMBERS=hazelcast-1:5701,hazelcast-2:5701,hazelcast-3:5701
+      - LOG_TRANSACTIONS=true
+    depends_on:
+      hazelcast-1:
+        condition: service_healthy
+    networks:
+      - bank-net
+
+  logging-service-3:
+    build:
+      context: ./logging-service
+      dockerfile: Dockerfile
+    container_name: logging-service-3
+    ports:
+      - "8004:8001"
+    environment:
+      - PORT=8001
+      - INSTANCE_NAME=logging-service-3
+      - HAZELCAST_CLUSTER_NAME=dev
+      - HAZELCAST_CLUSTER_MEMBERS=hazelcast-1:5701,hazelcast-2:5701,hazelcast-3:5701
+      - LOG_TRANSACTIONS=true
+    depends_on:
+      hazelcast-1:
+        condition: service_healthy
+    networks:
+      - bank-net
+
+  # ---------------------------------------------------------
+  # Counter Service (Queue Consumer & PostgreSQL Writer)
+  # ---------------------------------------------------------
+  counter-service:
+    build:
+      context: ./counter-service
+      dockerfile: Dockerfile
+    container_name: counter-service
+    ports:
+      - "8002:8002"
+    environment:
+      - PORT=8002
+      - DATABASE_URL=postgresql://postgres:postgrespassword@postgres:5432/bank
+      - HAZELCAST_CLUSTER_NAME=dev
+      - HAZELCAST_CLUSTER_MEMBERS=hazelcast-1:5701,hazelcast-2:5701,hazelcast-3:5701
+      - HAZELCAST_QUEUE_NAME=counter_queue
+      - LOG_TRANSACTIONS=true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      hazelcast-1:
+        condition: service_healthy
+    networks:
+      - bank-net
+
+  # ---------------------------------------------------------
+  # Facade Service (API Gateway & Queue Producer)
+  # ---------------------------------------------------------
+  facade-service:
+    build:
+      context: ./facade-service
+      dockerfile: Dockerfile
+    container_name: facade-service
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - LOGGING_SERVICE_URLS=http://logging-service-1:8001,http://logging-service-2:8001,http://logging-service-3:8001
+      - COUNTER_SERVICE_URL=http://counter-service:8002
+      - HAZELCAST_CLUSTER_NAME=dev
+      - HAZELCAST_CLUSTER_MEMBERS=hazelcast-1:5701,hazelcast-2:5701,hazelcast-3:5701
+      - HAZELCAST_QUEUE_NAME=counter_queue
+    depends_on:
+      hazelcast-1:
+        condition: service_healthy
+      logging-service-1:
+        condition: service_started
+      counter-service:
+        condition: service_started
+    networks:
+      - bank-net
+
+networks:
+  bank-net:
+    driver: bridge

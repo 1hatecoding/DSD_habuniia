@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: facade-service
+  namespace: bank-system
+  labels:
+    app: facade-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: facade-service
+  template:
+    metadata:
+      labels:
+        app: facade-service
+    spec:
+      serviceAccountName: microservices-sa
+      containers:
+        - name: facade-service
+          image: facade-service:k8s
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: app-config
+          env:
+            - name: PORT
+              value: "8000"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "300m"
+              memory: "384Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: facade-service
+  namespace: bank-system
+spec:
+  type: NodePort
+  ports:
+    - port: 8000
+      targetPort: 8000
+      nodePort: 30080
+      name: http
+  selector:
+    app: facade-service
