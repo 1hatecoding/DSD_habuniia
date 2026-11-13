@@ -1,0 +1,43 @@
+hazelcast:
+  cluster-name: lab2-cluster
+  network:
+    port:
+      auto-increment: false
+      port: 5701
+    join:
+      multicast:
+        enabled: false
+      tcp-ip:
+        enabled: true
+        member-list:
+          - hazelcast-node-1
+          - hazelcast-node-2
+          - hazelcast-node-3
+    rest-api:
+      enabled: true
+      endpoint-groups:
+        HEALTH_CHECK:
+          enabled: true
+        CLUSTER_READ:
+          enabled: true
+        DATA:
+          enabled: true
+  cp-subsystem:
+    cp-member-count: 3
+    group-size: 3
+    session-time-to-live-seconds: 10
+    session-heartbeat-interval-seconds: 2
+    missing-cp-member-auto-removal-seconds: 15
+  map:
+    default:
+      backup-count: 1
+      async-backup-count: 0
+    distributed-map:
+      backup-count: 1
+      async-backup-count: 0
+    safe-map:
+      backup-count: 2
+      async-backup-count: 0
+    counter-map:
+      backup-count: 2
+      async-backup-count: 0

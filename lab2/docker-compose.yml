@@ -1,0 +1,59 @@
+services:
+  hazelcast-node-1:
+    image: hazelcast/hazelcast:5.4.0
+    container_name: hazelcast-node-1
+    hostname: hazelcast-node-1
+    ports:
+      - "5701:5701"
+    environment:
+      JAVA_OPTS: "-Dhazelcast.config=/opt/hazelcast/config_ext/hazelcast.yaml -Xms256m -Xmx512m"
+    volumes:
+      - ./hazelcast.yaml:/opt/hazelcast/config_ext/hazelcast.yaml:ro
+    networks:
+      - hazelcast-net
+
+  hazelcast-node-2:
+    image: hazelcast/hazelcast:5.4.0
+    container_name: hazelcast-node-2
+    hostname: hazelcast-node-2
+    ports:
+      - "5702:5701"
+    environment:
+      JAVA_OPTS: "-Dhazelcast.config=/opt/hazelcast/config_ext/hazelcast.yaml -Xms256m -Xmx512m"
+    volumes:
+      - ./hazelcast.yaml:/opt/hazelcast/config_ext/hazelcast.yaml:ro
+    networks:
+      - hazelcast-net
+
+  hazelcast-node-3:
+    image: hazelcast/hazelcast:5.4.0
+    container_name: hazelcast-node-3
+    hostname: hazelcast-node-3
+    ports:
+      - "5703:5701"
+    environment:
+      JAVA_OPTS: "-Dhazelcast.config=/opt/hazelcast/config_ext/hazelcast.yaml -Xms256m -Xmx512m"
+    volumes:
+      - ./hazelcast.yaml:/opt/hazelcast/config_ext/hazelcast.yaml:ro
+    networks:
+      - hazelcast-net
+
+  management-center:
+    image: hazelcast/management-center:5.4.0
+    container_name: hazelcast-mc
+    ports:
+      - "8080:8080"
+    environment:
+      MC_DEFAULT_CLUSTER: "lab2-cluster"
+      MC_DEFAULT_CLUSTER_MEMBERS: "hazelcast-node-1:5701,hazelcast-node-2:5701,hazelcast-node-3:5701"
+    depends_on:
+      - hazelcast-node-1
+      - hazelcast-node-2
+      - hazelcast-node-3
+    networks:
+      - hazelcast-net
+
+networks:
+  hazelcast-net:
+    driver: bridge
+
