@@ -1,0 +1,177 @@
+services:
+  # --- Config Server (Service Registry) ---
+  config-server:
+    build:
+      context: ./config-server
+    container_name: config-server
+    ports:
+      - "8888:8888"
+    environment:
+      - PORT=8888
+
+  # --- Hazelcast 3-node cluster with Distributed Queue & Map ---
+  hazelcast-1:
+    image: hazelcast/hazelcast:5.3
+    container_name: hazelcast-1
+    environment:
+      - HZ_CLUSTERNAME=dev
+      - HZ_CONFIG_FILE=/opt/hazelcast/config/hazelcast.yaml
+      - HZ_NETWORK_PUBLICADDRESS=hazelcast-1:5701
+      - HZ_NETWORK_JOIN_MULTICAST_ENABLED=false
+      - HZ_NETWORK_JOIN_TCPIP_ENABLED=true
+      - HZ_NETWORK_JOIN_TCPIP_MEMBERS=hazelcast-1,hazelcast-2,hazelcast-3
+    volumes:
+      - ./hazelcast/hazelcast.yaml:/opt/hazelcast/config/hazelcast.yaml:ro
+    ports:
+      - "5701:5701"
+
+  hazelcast-2:
+    image: hazelcast/hazelcast:5.3
+    container_name: hazelcast-2
+    environment:
+      - HZ_CLUSTERNAME=dev
+      - HZ_CONFIG_FILE=/opt/hazelcast/config/hazelcast.yaml
+      - HZ_NETWORK_PUBLICADDRESS=hazelcast-2:5701
+      - HZ_NETWORK_JOIN_MULTICAST_ENABLED=false
+      - HZ_NETWORK_JOIN_TCPIP_ENABLED=true
+      - HZ_NETWORK_JOIN_TCPIP_MEMBERS=hazelcast-1,hazelcast-2,hazelcast-3
+    volumes:
+      - ./hazelcast/hazelcast.yaml:/opt/hazelcast/config/hazelcast.yaml:ro
+    ports:
+      - "5702:5701"
+
+  hazelcast-3:
+    image: hazelcast/hazelcast:5.3
+    container_name: hazelcast-3
+    environment:
+      - HZ_CLUSTERNAME=dev
+      - HZ_CONFIG_FILE=/opt/hazelcast/config/hazelcast.yaml
+      - HZ_NETWORK_PUBLICADDRESS=hazelcast-3:5701
+      - HZ_NETWORK_JOIN_MULTICAST_ENABLED=false
+      - HZ_NETWORK_JOIN_TCPIP_ENABLED=true
+      - HZ_NETWORK_JOIN_TCPIP_MEMBERS=hazelcast-1,hazelcast-2,hazelcast-3
+    volumes:
+      - ./hazelcast/hazelcast.yaml:/opt/hazelcast/config/hazelcast.yaml:ro
+    ports:
+      - "5703:5701"
+
+  # --- PostgreSQL Database for counter-service ---
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    environment:
+      POSTGRES_DB: bank
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata_lab4:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d bank"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+
+  # --- Logging-service instances (3 replicas) ---
+  logging-service-1:
+    build:
+      context: ./logging-service
+    container_name: logging-service-1
+    environment:
+      - PORT=8001
+      - INSTANCE_NAME=logging-service-1
+      - MY_URL=http://logging-service-1:8001
+      - CONFIG_SERVER_URL=http://config-server:8888
+      - HAZELCAST_MEMBER=hazelcast-1:5701
+      - HAZELCAST_CLUSTER_MEMBERS=hazelcast-1:5701,hazelcast-2:5701,hazelcast-3:5701
+      - HAZELCAST_CLUSTER_NAME=dev
+      - LOG_TRANSACTIONS=${LOG_TRANSACTIONS:-1}
+    ports:
+      - "8001:8001"
+    depends_on:
+      - hazelcast-1
+      - config-server
+
+  logging-service-2:
+    build:
+      context: ./logging-service
+    container_name: logging-service-2
+    environment:
+      - PORT=8001
+      - INSTANCE_NAME=logging-service-2
+      - MY_URL=http://logging-service-2:8001
+      - CONFIG_SERVER_URL=http://config-server:8888
+      - HAZELCAST_MEMBER=hazelcast-2:5701
+      - HAZELCAST_CLUSTER_MEMBERS=hazelcast-2:5701,hazelcast-1:5701,hazelcast-3:5701
+      - HAZELCAST_CLUSTER_NAME=dev
+      - LOG_TRANSACTIONS=${LOG_TRANSACTIONS:-1}
+    ports:
+      - "8003:8001"
+    depends_on:
+      - hazelcast-2
+      - config-server
+
+  logging-service-3:
+    build:
+      context: ./logging-service
+    container_name: logging-service-3
+    environment:
+      - PORT=8001
+      - INSTANCE_NAME=logging-service-3
+      - MY_URL=http://logging-service-3:8001
+      - CONFIG_SERVER_URL=http://config-server:8888
+      - HAZELCAST_MEMBER=hazelcast-3:5701
+      - HAZELCAST_CLUSTER_MEMBERS=hazelcast-3:5701,hazelcast-1:5701,hazelcast-2:5701
+      - HAZELCAST_CLUSTER_NAME=dev
+      - LOG_TRANSACTIONS=${LOG_TRANSACTIONS:-1}
+    ports:
+      - "8004:8001"
+    depends_on:
+      - hazelcast-3
+      - config-server
+
+  # --- Counter-service with PostgreSQL & Hazelcast MQ Consumer ---
+  counter-service:
+    build:
+      context: ./counter-service
+    container_name: counter-service
+    environment:
+      - PORT=8002
+      - MY_URL=http://counter-service:8002
+      - CONFIG_SERVER_URL=http://config-server:8888
+      - DATABASE_URL=postgresql://postgres:postgrespassword@postgres:5432/bank
+      - HAZELCAST_CLUSTER_MEMBERS=hazelcast-1:5701,hazelcast-2:5701,hazelcast-3:5701
+      - HAZELCAST_CLUSTER_NAME=dev
+      - LOG_TRANSACTIONS=${LOG_TRANSACTIONS:-1}
+    ports:
+      - "8002:8002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      hazelcast-1:
+        condition: service_started
+      config-server:
+        condition: service_started
+
+  # --- Facade-service with Config Server discovery & MQ Producer ---
+  facade-service:
+    build:
+      context: ./facade-service
+    container_name: facade-service
+    environment:
+      - PORT=8000
+      - CONFIG_SERVER_URL=http://config-server:8888
+      - HAZELCAST_CLUSTER_MEMBERS=hazelcast-1:5701,hazelcast-2:5701,hazelcast-3:5701
+      - HAZELCAST_CLUSTER_NAME=dev
+    ports:
+      - "8000:8000"
+    depends_on:
+      - config-server
+      - logging-service-1
+      - logging-service-2
+      - logging-service-3
+      - counter-service
+
+volumes:
+  pgdata_lab4:
