@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+*.db
+*.sqlite3
+test_counter.db
+test_shared_hz.db
+shared_hazelcast_fallback.db
+pgdata/
+.env
+
+secret_folder/

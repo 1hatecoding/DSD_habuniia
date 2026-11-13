@@ -1,0 +1,30 @@
+hazelcast:
+  cluster-name: dev
+  network:
+    port:
+      auto-increment: false
+      port: 5701
+    interfaces:
+      enabled: true
+      interfaces:
+        - 172.*.*.*
+        - 10.*.*.*
+        - 192.168.*.*
+    join:
+      multicast:
+        enabled: false
+      tcp-ip:
+        enabled: true
+        member-list:
+          - hazelcast-1
+          - hazelcast-2
+          - hazelcast-3
+  rest-api:
+    enabled: true
+    endpoint-groups:
+      HEALTH_CHECK:
+        enabled: true
+      DATA:
+        enabled: true
+      CLUSTER_READ:
+        enabled: true
